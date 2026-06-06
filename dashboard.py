@@ -195,10 +195,11 @@ with st.sidebar:
                 st.markdown(f"· {split}: {n} exemplos")
 
 # ─── abas ────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13 = st.tabs([
     "📈 Experimentos", "⚖️ Comparação", "🎯 Inferência", "🧪 Simulador",
     "🎯 Calibração", "🚨 OOD", "🔬 Erros",
     "🧠 Explainability", "⚡ Quantização", "📊 Baseline", "🔄 Active Learning",
+    "📉 Learning Curves", "🛰️ Drift Detection",
 ])
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -1270,3 +1271,231 @@ with tab11:
                 height=300, template="plotly_white",
             )
             st.plotly_chart(fig_al, use_container_width=True)
+
+# ════════════════════════════════════════════════════════════════════════════
+# ABA 12 — LEARNING CURVES
+# ════════════════════════════════════════════════════════════════════════════
+with tab12:
+    st.header("📉 Learning Curves")
+    st.caption(
+        "Quantos exemplos são necessários para atingir F1=0.90? "
+        "O modelo está saturado ou mais dados ajudariam? "
+        "Cada ponto treina do **base model pré-treinado** (não do checkpoint), "
+        "medindo o efeito real do tamanho do dataset."
+    )
+
+    lc_path = ROOT / "models" / "learning_curves.json"
+
+    if not lc_path.exists():
+        st.warning("Execute `python src/learning_curves.py` para gerar as curvas.")
+        st.info(
+            "⚠️ **Aviso:** o script treina o modelo várias vezes — "
+            "leva ~15–30 min no MPS. O baseline TF-IDF termina em < 1 min."
+        )
+    else:
+        import json as _json_lc
+        lc_data = _json_lc.loads(lc_path.read_text())
+        cb_results = lc_data.get("codebert", [])
+        bl_results = lc_data.get("baseline", [])
+
+        if cb_results or bl_results:
+            # Métricas rápidas
+            if cb_results:
+                best = max(cb_results, key=lambda r: r["val_f1"])
+                worst = min(cb_results, key=lambda r: r["val_f1"])
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Melhor F1 (val)", f"{best['val_f1']:.4f}",
+                          f"{best['fraction']:.0%} dos dados")
+                c2.metric("F1 mínimo (val)", f"{worst['val_f1']:.4f}",
+                          f"{worst['fraction']:.0%} dos dados")
+                delta_last = cb_results[-1]["val_f1"] - cb_results[-2]["val_f1"] if len(cb_results) > 1 else 0
+                c3.metric("Ganho 80%→100%", f"{delta_last:+.4f}",
+                          "saturado" if abs(delta_last) < 0.01 else "ainda aprendendo")
+
+            st.divider()
+
+            # Curva principal
+            fig_lc = go.Figure()
+            if cb_results:
+                fig_lc.add_trace(go.Scatter(
+                    x=[r["n_train"] for r in cb_results],
+                    y=[r["val_f1"] for r in cb_results],
+                    mode="lines+markers", name="CodeBERT (val F1)",
+                    line=dict(color="#3498db", width=2), marker=dict(size=9),
+                ))
+                fig_lc.add_trace(go.Scatter(
+                    x=[r["n_train"] for r in cb_results],
+                    y=[r["test_f1"] for r in cb_results],
+                    mode="lines+markers", name="CodeBERT (test F1)",
+                    line=dict(color="#3498db", width=2, dash="dash"),
+                    marker=dict(size=9, symbol="diamond"),
+                ))
+            if bl_results:
+                fig_lc.add_trace(go.Scatter(
+                    x=[r["n_train"] for r in bl_results],
+                    y=[r["val_f1"] for r in bl_results],
+                    mode="lines+markers", name="TF-IDF baseline (val F1)",
+                    line=dict(color="#f39c12", width=2), marker=dict(size=9),
+                ))
+
+            fig_lc.add_hline(y=0.90, line_dash="dot", line_color="green",
+                             annotation_text="F1=0.90 (target)")
+            fig_lc.update_layout(
+                title="F1 vs Tamanho do Dataset",
+                xaxis_title="Exemplos de treino",
+                yaxis_title="F1 Macro",
+                yaxis_range=[0, 1.05],
+                height=420, template="plotly_white",
+            )
+            st.plotly_chart(fig_lc, use_container_width=True)
+
+            # Tabela comparativa
+            if cb_results and bl_results:
+                st.subheader("Comparação por fração")
+                bl_by_n = {r["n_train"]: r for r in bl_results}
+                rows_lc = []
+                for r in cb_results:
+                    bl = bl_by_n.get(r["n_train"], {})
+                    gap = r["val_f1"] - bl.get("val_f1", 0)
+                    rows_lc.append({
+                        "Fração": f"{r['fraction']:.0%}",
+                        "N treino": r["n_train"],
+                        "CodeBERT F1": f"{r['val_f1']:.4f}",
+                        "Baseline F1": f"{bl.get('val_f1', 0):.4f}",
+                        "Gap (CB - BL)": f"{gap:+.4f}",
+                    })
+                st.dataframe(pd.DataFrame(rows_lc), use_container_width=True, hide_index=True)
+
+        if st.button("Rodar apenas baseline (rápido, sem GPU)", key="run_lc_baseline"):
+            with st.spinner("Rodando baseline learning curves..."):
+                from learning_curves import run_baseline_learning_curves, save_results
+                bl = run_baseline_learning_curves()
+                cb = lc_data.get("codebert", []) if lc_path.exists() else []
+                save_results(cb, bl)
+            st.success("Baseline concluído — recarregue a aba.")
+
+# ════════════════════════════════════════════════════════════════════════════
+# ABA 13 — DRIFT DETECTION
+# ════════════════════════════════════════════════════════════════════════════
+with tab13:
+    st.header("🛰️ Drift Detection")
+    st.caption(
+        "Monitora se a distribuição das predições em produção está se desviando do esperado. "
+        "**PSI** mede drift na distribuição de classes. **KS test** mede drift na distribuição de confiança."
+    )
+
+    ref_path = ROOT / "models" / "drift_reference.json"
+
+    if not ref_path.exists():
+        st.warning("Execute `python src/drift_detection.py` para gerar a distribuição de referência.")
+    else:
+        import json as _json_dr
+        ref_data = _json_dr.loads(ref_path.read_text())
+
+        # Distribuição de referência
+        st.subheader("Distribuição de referência (train set)")
+        ref_fracs = ref_data.get("label_fractions", {})
+        fig_ref = go.Figure(go.Bar(
+            x=list(ref_fracs.keys()),
+            y=list(ref_fracs.values()),
+            marker_color=[LABEL_COLORS.get(l, "#888") for l in ref_fracs.keys()],
+            text=[f"{v:.1%}" for v in ref_fracs.values()],
+            textposition="outside",
+        ))
+        fig_ref.update_layout(
+            title="Distribuição esperada (referência)",
+            yaxis_range=[0, 0.4], height=300, template="plotly_white",
+            yaxis_title="Fração",
+        )
+        st.plotly_chart(fig_ref, use_container_width=True)
+
+        st.divider()
+        st.subheader("Simular cenários de drift")
+        st.caption("Selecione um cenário para ver como PSI e KS detectam mudanças na distribuição.")
+
+        scenario_col, result_col = st.columns([1, 2])
+        with scenario_col:
+            scenario = st.radio("Cenário", [
+                "✅ Sem drift (val set normal)",
+                "🚨 Label shift (só security)",
+                "⚠️ Confidence drop (fronteira arch/style)",
+                "🌍 Domain shift (fora do domínio)",
+            ], index=0)
+
+        scenario_map = {
+            "✅ Sem drift (val set normal)": None,
+            "🚨 Label shift (só security)": "label_shift",
+            "⚠️ Confidence drop (fronteira arch/style)": "confidence_drop",
+            "🌍 Domain shift (fora do domínio)": "domain_shift",
+        }
+
+        if st.button("Executar detecção", type="primary"):
+            from drift_detection import DriftMonitor
+
+            monitor = DriftMonitor(str(FULL_DIR), str(ref_path))
+            monitor.load_reference()
+
+            drift_type = scenario_map[scenario]
+            with st.spinner("Rodando inferência..."):
+                if drift_type is None:
+                    import json as _j
+                    val_texts = [_j.loads(l)["text"] for l in open(SPLITS_DIR / "val.jsonl")]
+                    result = monitor.check(val_texts)
+                else:
+                    _, result = monitor.simulate_drift(drift_type)
+
+            with result_col:
+                verdict = result["overall_verdict"]
+                color_map = {"no_drift": "🟢", "monitor": "🟡", "alert": "🔴"}
+                emoji = color_map.get(verdict, "❓")
+
+                c1, c2, c3 = st.columns(3)
+                c1.metric("PSI", f"{result['psi']:.3f}",
+                          result["psi_status"].upper(), delta_color="off")
+                c2.metric("KS p-value", f"{result['ks_confidence']['p_value']:.4f}",
+                          "drift" if result["ks_confidence"]["drift_detected"] else "ok",
+                          delta_color="off")
+                c3.metric("Veredicto", f"{emoji} {verdict.upper()}")
+
+                # Gráfico: distribuição atual vs referência
+                curr_fracs = result.get("current_distribution", {})
+                if curr_fracs:
+                    fig_cmp = go.Figure()
+                    fig_cmp.add_bar(
+                        name="Referência",
+                        x=list(ref_fracs.keys()), y=list(ref_fracs.values()),
+                        marker_color="#bdc3c7",
+                        text=[f"{v:.1%}" for v in ref_fracs.values()], textposition="outside",
+                    )
+                    fig_cmp.add_bar(
+                        name="Atual",
+                        x=list(curr_fracs.keys()), y=list(curr_fracs.values()),
+                        marker_color=[LABEL_COLORS.get(l, "#888") for l in curr_fracs.keys()],
+                        text=[f"{v:.1%}" for v in curr_fracs.values()], textposition="outside",
+                    )
+                    fig_cmp.update_layout(
+                        barmode="group", title="Distribuição atual vs referência",
+                        yaxis_range=[0, 1.1], height=340, template="plotly_white",
+                    )
+                    st.plotly_chart(fig_cmp, use_container_width=True)
+
+                # Label drift
+                label_drift = result.get("label_drift", {})
+                if label_drift:
+                    st.markdown("**Drift por label:**")
+                    for label, delta in sorted(label_drift.items(), key=lambda x: -x[1]):
+                        bar = "█" * int(delta * 40)
+                        st.markdown(f"`{label:20s}` {bar} {delta:.1%}")
+
+        st.divider()
+        st.subheader("Interpretação do PSI")
+        st.markdown("""
+        | PSI | Status | Ação recomendada |
+        |---|---|---|
+        | < 0.10 | ✅ Estável | Continuar monitorando |
+        | 0.10 – 0.25 | ⚠️ Moderado | Investigar qual label mudou |
+        | > 0.25 | 🚨 Significativo | Retreinar o modelo |
+
+        **KS test** na distribuição de confiança: p < 0.05 indica que a distribuição de confiança mudou —
+        mesmo que as labels preditas sejam as mesmas, o modelo pode estar menos (ou mais) confiante.
+        """)
