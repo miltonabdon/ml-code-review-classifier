@@ -974,10 +974,10 @@ with tab8:
                 else:
                     cmp = compare_methods(full_model, full_tok, expl_text)
                     results_to_show = [
-                        ("Gradient × Input", cmp["gradient"]),
-                        ("Attention Rollout", cmp["rollout"]),
+                        ("Gradient × Input", cmp["gradient_saliency"]),
+                        ("Attention Rollout", cmp["attention_rollout"]),
                     ]
-                    st.metric("Correlação Spearman (grad vs rollout)", f"{cmp['spearman']:.3f}",
+                    st.metric("Correlação Spearman (grad vs rollout)", f"{cmp['spearman_corr']:.3f}",
                               help="1=idênticos, 0=sem correlação, -1=opostos")
 
             for method_name, res in results_to_show:
