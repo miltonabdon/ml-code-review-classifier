@@ -50,6 +50,418 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ─── Design System ────────────────────────────────────────────────────────────
+# Aesthetic: Precision Lab — warm white, deep slate, amber accent
+# Typography: IBM Plex Sans (body) + IBM Plex Mono (code/metrics)
+# No emojis in structural UI, no card grids, no gradient text, no glassmorphism
+st.markdown("""
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,600;1,300&family=IBM+Plex+Serif:wght@300;400&display=swap" rel="stylesheet">
+
+<style>
+/* ── Palette ───────────────────────────────────────────── */
+:root {
+  --c-bg:       oklch(98% 0.008 85);    /* warm off-white */
+  --c-surface:  oklch(96% 0.007 85);    /* slightly darker surface */
+  --c-border:   oklch(88% 0.010 85);    /* warm light border */
+  --c-slate:    oklch(28% 0.018 250);   /* deep blue-slate */
+  --c-slate-mid:oklch(45% 0.022 250);   /* mid slate */
+  --c-muted:    oklch(62% 0.014 85);    /* warm muted text */
+  --c-amber:    oklch(72% 0.165 68);    /* amber accent */
+  --c-amber-dim:oklch(82% 0.090 72);    /* soft amber */
+  --c-red:      oklch(55% 0.20 25);
+  --c-blue:     oklch(55% 0.18 240);
+  --c-green:    oklch(55% 0.18 160);
+  --c-purple:   oklch(50% 0.18 300);
+
+  --font-sans:  'IBM Plex Sans', sans-serif;
+  --font-mono:  'IBM Plex Mono', monospace;
+  --font-serif: 'IBM Plex Serif', serif;
+
+  --r: 4px;
+  --transition: 180ms cubic-bezier(0.25, 0, 0.1, 1);
+}
+
+/* ── Global reset ──────────────────────────────────────── */
+html, body, .stApp {
+  background-color: var(--c-bg) !important;
+  font-family: var(--font-sans) !important;
+  color: var(--c-slate) !important;
+}
+
+/* Remove Streamlit top bar decoration */
+header[data-testid="stHeader"] {
+  background: var(--c-bg) !important;
+  border-bottom: 1px solid var(--c-border) !important;
+}
+
+/* ── Sidebar ───────────────────────────────────────────── */
+section[data-testid="stSidebar"] {
+  background: var(--c-surface) !important;
+  border-right: 1px solid var(--c-border) !important;
+}
+
+section[data-testid="stSidebar"] * {
+  font-family: var(--font-sans) !important;
+}
+
+section[data-testid="stSidebar"] h1 {
+  font-size: 1.05rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em !important;
+  color: var(--c-slate) !important;
+  margin-bottom: 0 !important;
+}
+
+section[data-testid="stSidebar"] .stMarkdown p {
+  font-size: 0.775rem !important;
+  color: var(--c-muted) !important;
+  letter-spacing: 0.01em !important;
+}
+
+/* Sidebar separator */
+section[data-testid="stSidebar"] hr {
+  border-color: var(--c-border) !important;
+  margin: 1rem 0 !important;
+}
+
+/* ── Main content area ─────────────────────────────────── */
+.main .block-container {
+  padding-top: 2.5rem !important;
+  padding-left: 2.5rem !important;
+  padding-right: 2.5rem !important;
+  max-width: 1280px !important;
+}
+
+/* ── Typography ────────────────────────────────────────── */
+h1 {
+  font-family: var(--font-serif) !important;
+  font-weight: 300 !important;
+  font-size: clamp(1.6rem, 3vw, 2.2rem) !important;
+  letter-spacing: -0.01em !important;
+  color: var(--c-slate) !important;
+  line-height: 1.2 !important;
+  margin-bottom: 0.25rem !important;
+}
+
+h2 {
+  font-family: var(--font-sans) !important;
+  font-weight: 600 !important;
+  font-size: clamp(0.95rem, 1.5vw, 1.1rem) !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  color: var(--c-slate-mid) !important;
+  margin-top: 2.5rem !important;
+  margin-bottom: 1rem !important;
+  padding-bottom: 0.5rem !important;
+  border-bottom: 1px solid var(--c-border) !important;
+}
+
+h3 {
+  font-family: var(--font-sans) !important;
+  font-weight: 600 !important;
+  font-size: 0.925rem !important;
+  letter-spacing: 0.03em !important;
+  color: var(--c-slate) !important;
+}
+
+p, li, .stMarkdown {
+  font-family: var(--font-sans) !important;
+  font-size: 0.875rem !important;
+  line-height: 1.65 !important;
+  color: var(--c-slate) !important;
+}
+
+/* Caption / small */
+.stCaption, [data-testid="stCaptionContainer"] p {
+  font-size: 0.775rem !important;
+  color: var(--c-muted) !important;
+  font-style: italic !important;
+}
+
+/* ── Tabs ───────────────────────────────────────────────── */
+.stTabs [data-baseweb="tab-list"] {
+  background: transparent !important;
+  border-bottom: 1px solid var(--c-border) !important;
+  gap: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.stTabs [data-baseweb="tab"] {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  padding: 0.55rem 1rem !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.775rem !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  color: var(--c-muted) !important;
+  transition: color var(--transition), border-color var(--transition) !important;
+}
+
+.stTabs [data-baseweb="tab"]:hover {
+  color: var(--c-slate) !important;
+  border-bottom-color: var(--c-border) !important;
+}
+
+.stTabs [aria-selected="true"] {
+  color: var(--c-slate) !important;
+  border-bottom-color: var(--c-amber) !important;
+  font-weight: 600 !important;
+}
+
+/* Tab content */
+.stTabs [data-baseweb="tab-panel"] {
+  padding-top: 2rem !important;
+}
+
+/* ── Metrics ────────────────────────────────────────────── */
+[data-testid="metric-container"] {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+[data-testid="metric-container"] label {
+  font-family: var(--font-mono) !important;
+  font-size: 0.68rem !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  color: var(--c-muted) !important;
+  font-weight: 400 !important;
+}
+
+[data-testid="metric-container"] [data-testid="stMetricValue"] {
+  font-family: var(--font-mono) !important;
+  font-size: 1.85rem !important;
+  font-weight: 600 !important;
+  color: var(--c-slate) !important;
+  letter-spacing: -0.02em !important;
+  line-height: 1.1 !important;
+}
+
+[data-testid="metric-container"] [data-testid="stMetricDelta"] {
+  font-family: var(--font-mono) !important;
+  font-size: 0.72rem !important;
+}
+
+/* Metric divider line on left */
+[data-testid="metric-container"]::before {
+  content: '';
+  display: block;
+  width: 2px;
+  height: 2.5rem;
+  background: var(--c-amber);
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+[data-testid="column"] > div > div {
+  position: relative;
+}
+
+/* ── Buttons ────────────────────────────────────────────── */
+.stButton button {
+  font-family: var(--font-sans) !important;
+  font-size: 0.775rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  border-radius: var(--r) !important;
+  transition: all var(--transition) !important;
+}
+
+.stButton button[kind="primary"] {
+  background: var(--c-slate) !important;
+  color: var(--c-bg) !important;
+  border: none !important;
+}
+
+.stButton button[kind="primary"]:hover {
+  background: var(--c-slate-mid) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px oklch(28% 0.018 250 / 0.2) !important;
+}
+
+.stButton button[kind="secondary"] {
+  background: transparent !important;
+  color: var(--c-slate) !important;
+  border: 1px solid var(--c-border) !important;
+}
+
+.stButton button[kind="secondary"]:hover {
+  border-color: var(--c-slate) !important;
+}
+
+/* ── Inputs / Selects / Textareas ───────────────────────── */
+.stTextArea textarea,
+.stTextInput input,
+[data-baseweb="select"] > div:first-child {
+  font-family: var(--font-sans) !important;
+  font-size: 0.875rem !important;
+  background: white !important;
+  border: 1px solid var(--c-border) !important;
+  border-radius: var(--r) !important;
+  color: var(--c-slate) !important;
+  transition: border-color var(--transition) !important;
+}
+
+.stTextArea textarea:focus,
+.stTextInput input:focus {
+  border-color: var(--c-amber) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px oklch(72% 0.165 68 / 0.12) !important;
+}
+
+/* ── Selectbox ──────────────────────────────────────────── */
+[data-baseweb="select"] {
+  font-family: var(--font-sans) !important;
+  font-size: 0.875rem !important;
+}
+
+/* ── Dataframes / Tables ────────────────────────────────── */
+.stDataFrame {
+  border: 1px solid var(--c-border) !important;
+  border-radius: var(--r) !important;
+  overflow: hidden !important;
+}
+
+.stDataFrame table {
+  font-family: var(--font-mono) !important;
+  font-size: 0.775rem !important;
+}
+
+.stDataFrame thead tr {
+  background: var(--c-surface) !important;
+  border-bottom: 1px solid var(--c-border) !important;
+}
+
+.stDataFrame thead th {
+  font-family: var(--font-sans) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+  font-size: 0.68rem !important;
+  color: var(--c-muted) !important;
+  padding: 0.6rem 0.75rem !important;
+}
+
+/* ── Radio buttons ──────────────────────────────────────── */
+[data-testid="stRadio"] label {
+  font-family: var(--font-sans) !important;
+  font-size: 0.825rem !important;
+  color: var(--c-slate) !important;
+}
+
+/* ── Expander ───────────────────────────────────────────── */
+.stExpander {
+  border: 1px solid var(--c-border) !important;
+  border-radius: var(--r) !important;
+}
+
+.stExpander summary {
+  font-family: var(--font-sans) !important;
+  font-size: 0.825rem !important;
+  font-weight: 600 !important;
+  color: var(--c-slate) !important;
+}
+
+/* ── Divider ────────────────────────────────────────────── */
+hr {
+  border-color: var(--c-border) !important;
+  margin: 1.5rem 0 !important;
+}
+
+/* ── Alerts / Info / Success ────────────────────────────── */
+.stAlert, .stSuccess, .stWarning, .stError, .stInfo {
+  border-radius: var(--r) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.825rem !important;
+}
+
+[data-testid="stInfoBox"] {
+  background: oklch(97% 0.012 85) !important;
+  border-left: 3px solid var(--c-amber) !important;
+  border-radius: 0 var(--r) var(--r) 0 !important;
+}
+
+[data-testid="stSuccessBox"] {
+  border-left: 3px solid var(--c-green) !important;
+}
+
+[data-testid="stWarningBox"] {
+  border-left: 3px solid var(--c-amber) !important;
+}
+
+[data-testid="stErrorBox"] {
+  border-left: 3px solid var(--c-red) !important;
+}
+
+/* ── Slider ─────────────────────────────────────────────── */
+[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"] {
+  background: var(--c-slate) !important;
+  border: none !important;
+}
+
+[data-testid="stSlider"] [data-baseweb="slider"] [data-testid="stSliderThumb"] {
+  background: var(--c-amber) !important;
+}
+
+/* ── Plotly charts ──────────────────────────────────────── */
+.js-plotly-plot .plotly .main-svg {
+  background: transparent !important;
+}
+
+/* ── Spinner ────────────────────────────────────────────── */
+[data-testid="stSpinner"] {
+  font-family: var(--font-sans) !important;
+  font-size: 0.825rem !important;
+  color: var(--c-muted) !important;
+}
+
+/* ── Tab badges / label overrides ──────────────────────── */
+/* Strip emojis visually in tabs for cleaner look - not possible in pure CSS,
+   handled by leaving them but styling tabs to be refined */
+
+/* ── Scrollbar ──────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--c-bg); }
+::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--c-muted); }
+
+/* ── Page entrance animation ────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.main .block-container {
+  animation: fadeUp 0.35s cubic-bezier(0.25, 0, 0.1, 1) both;
+}
+
+/* ── Section label above charts (custom class) ──────────── */
+.section-label {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+/* ── Sidebar status indicators ──────────────────────────── */
+.status-ok   { color: oklch(55% 0.18 160); font-weight: 600; }
+.status-fail { color: oklch(55% 0.20 25);  font-weight: 600; }
+</style>
+""", unsafe_allow_html=True)
+
 # ─── helpers MLflow ──────────────────────────────────────────────────────────
 @st.cache_resource
 def get_mlflow_client():
@@ -173,33 +585,125 @@ def simulate_training(epochs, lr, dataset_size, method, lora_rank=16):
     return e, train_loss + noise_train, val_loss + noise_val, val_acc
 
 
+# ─── Plotly layout defaults ───────────────────────────────────────────────────
+PLOTLY_LAYOUT = dict(
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(family="IBM Plex Sans, sans-serif", color="#2d3142", size=11),
+    xaxis=dict(
+        showgrid=True, gridcolor="rgba(0,0,0,0.06)", gridwidth=1,
+        linecolor="rgba(0,0,0,0.15)", tickfont=dict(size=10, family="IBM Plex Mono"),
+        zeroline=False,
+    ),
+    yaxis=dict(
+        showgrid=True, gridcolor="rgba(0,0,0,0.06)", gridwidth=1,
+        linecolor="rgba(0,0,0,0.15)", tickfont=dict(size=10, family="IBM Plex Mono"),
+        zeroline=False,
+    ),
+    legend=dict(
+        font=dict(size=10, family="IBM Plex Sans"),
+        bgcolor="rgba(0,0,0,0)",
+        bordercolor="rgba(0,0,0,0.10)",
+        borderwidth=1,
+    ),
+    margin=dict(l=12, r=12, t=36, b=12),
+    hoverlabel=dict(
+        bgcolor="white", bordercolor="rgba(0,0,0,0.15)",
+        font=dict(family="IBM Plex Mono", size=11),
+    ),
+    title_font=dict(family="IBM Plex Sans", size=12, color="#6b7280"),
+    title_x=0,
+)
+
+# Palette racionada: slate para primário, amber para acento, depois semântica
+PALETTE = {
+    "slate":  "#2d3142",
+    "amber":  "#d4851a",
+    "blue":   "#2c7bb6",
+    "green":  "#3d9b6e",
+    "red":    "#c0392b",
+    "purple": "#7c5cbf",
+    "gray":   "#9ca3af",
+}
+
+def apply_layout(fig, title="", height=380):
+    fig.update_layout(**PLOTLY_LAYOUT, title=title, height=height)
+    return fig
+
+
 # ─── sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.title("🔬 ML Code Review")
-    st.caption("CodeBERT · Fine-tuning · LoRA")
+    st.markdown("""
+    <div style="padding: 0.25rem 0 1rem 0;">
+      <div style="font-family: 'IBM Plex Serif', serif; font-size: 1.1rem; font-weight: 300;
+                  color: oklch(28% 0.018 250); letter-spacing: -0.01em; line-height: 1.3;">
+        ML Code Review<br>
+        <span style="font-size: 0.65rem; font-family: 'IBM Plex Mono', monospace;
+                     letter-spacing: 0.08em; text-transform: uppercase;
+                     color: oklch(62% 0.014 85); font-weight: 400;">
+          Classifier v2.0
+        </span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     st.divider()
 
     full_model, full_tok = load_full_model()
     lora_model, lora_tok = load_lora_model()
 
-    st.markdown("**Status dos modelos**")
-    st.markdown(f"{'✅' if full_model else '❌'} Full Fine-tuning")
-    st.markdown(f"{'✅' if lora_model else '❌'} LoRA Adapter")
+    st.markdown("""<span style="font-family:'IBM Plex Mono',monospace; font-size:0.62rem;
+        letter-spacing:0.1em; text-transform:uppercase; color:oklch(62% 0.014 85);">
+        Modelos</span>""", unsafe_allow_html=True)
+
+    full_ok = full_model is not None
+    lora_ok = lora_model is not None
+    st.markdown(
+        f"""<div style="font-family:'IBM Plex Sans',sans-serif; font-size:0.8rem;
+            line-height:2; color:oklch(28% 0.018 250);">
+          <span style="color:{'oklch(55% 0.18 160)' if full_ok else 'oklch(55% 0.20 25)'};">
+            {'●' if full_ok else '○'}</span>&nbsp; Full Fine-tuning<br>
+          <span style="color:{'oklch(55% 0.18 160)' if lora_ok else 'oklch(55% 0.20 25)'};">
+            {'●' if lora_ok else '○'}</span>&nbsp; LoRA Adapter
+        </div>""", unsafe_allow_html=True)
 
     if SPLITS_DIR.exists():
-        st.markdown("**Dataset**")
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("""<span style="font-family:'IBM Plex Mono',monospace; font-size:0.62rem;
+            letter-spacing:0.1em; text-transform:uppercase; color:oklch(62% 0.014 85);">
+            Dataset</span>""", unsafe_allow_html=True)
+        rows = []
         for split in ["train", "val", "test"]:
             p = SPLITS_DIR / f"{split}.jsonl"
             if p.exists():
                 n = sum(1 for _ in open(p))
-                st.markdown(f"· {split}: {n} exemplos")
+                rows.append(f"<tr><td style='color:oklch(62% 0.014 85);padding-right:1rem'>{split}</td>"
+                            f"<td style='font-family:IBM Plex Mono,monospace;font-weight:600'>{n}</td></tr>")
+        st.markdown(
+            f"""<table style="font-family:'IBM Plex Sans',sans-serif; font-size:0.775rem;
+                color:oklch(28% 0.018 250); border-collapse:collapse; margin-top:0.5rem;">
+                {''.join(rows)}</table>""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("""<span style="font-family:'IBM Plex Mono',monospace; font-size:0.62rem;
+        letter-spacing:0.1em; text-transform:uppercase; color:oklch(62% 0.014 85);">
+        Resultados</span>""", unsafe_allow_html=True)
+    st.markdown("""
+    <div style="font-family:'IBM Plex Mono',monospace; font-size:0.775rem;
+                color:oklch(28% 0.018 250); line-height:1.9; margin-top:0.5rem;">
+      <div>Full FT &nbsp;<span style="color:oklch(72% 0.165 68); font-weight:600;">0.876</span></div>
+      <div>LoRA &nbsp;&nbsp;&nbsp;<span style="color:oklch(72% 0.165 68); font-weight:600;">0.920</span></div>
+      <div>INT8 &nbsp;&nbsp;&nbsp;<span style="color:oklch(72% 0.165 68); font-weight:600;">0.920</span></div>
+      <div>TF-IDF &nbsp;<span style="color:oklch(62% 0.014 85);">0.824</span></div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ─── abas ────────────────────────────────────────────────────────────────────
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13 = st.tabs([
-    "📈 Experimentos", "⚖️ Comparação", "🎯 Inferência", "🧪 Simulador",
-    "🎯 Calibração", "🚨 OOD", "🔬 Erros",
-    "🧠 Explainability", "⚡ Quantização", "📊 Baseline", "🔄 Active Learning",
-    "📉 Learning Curves", "🛰️ Drift Detection",
+    "Experimentos", "Comparação", "Inferência", "Simulador",
+    "Calibração", "OOD", "Erros",
+    "Explainability", "Quantização", "Baseline", "Active Learning",
+    "Learning Curves", "Drift Detection",
 ])
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -266,7 +770,7 @@ with tab1:
         yaxis_title="Loss",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         height=420,
-        template="plotly_white",
+        template="simple_white",
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -296,7 +800,7 @@ with tab1:
         yaxis_title="Accuracy",
         yaxis_range=[0, 1.05],
         height=320,
-        template="plotly_white",
+        template="simple_white",
     )
     st.plotly_chart(fig_acc, use_container_width=True)
 
@@ -372,7 +876,7 @@ with tab2:
             yaxis_range=[0, 1.05],
             yaxis_title="F1",
             height=360,
-            template="plotly_white",
+            template="simple_white",
         )
         st.plotly_chart(fig_f1, use_container_width=True)
 
@@ -491,7 +995,7 @@ with tab3:
                     yaxis_range=[0, 1.1],
                     yaxis_title="Probabilidade",
                     height=300,
-                    template="plotly_white",
+                    template="simple_white",
                     showlegend=False,
                 )
                 st.plotly_chart(fig_prob, use_container_width=True)
@@ -560,7 +1064,7 @@ with tab4:
             xaxis_title="Epoch",
             yaxis_title="Loss",
             height=350,
-            template="plotly_white",
+            template="simple_white",
         )
         st.plotly_chart(fig_sim, use_container_width=True)
 
@@ -577,7 +1081,7 @@ with tab4:
             yaxis_title="Accuracy",
             yaxis_range=[0, 1.05],
             height=280,
-            template="plotly_white",
+            template="simple_white",
         )
         st.plotly_chart(fig_acc_sim, use_container_width=True)
 
@@ -644,7 +1148,7 @@ with tab5:
                 text=[f"{p:.1%}" for p in probs], textposition="outside",
             ))
         fig_temp.update_layout(
-            barmode="group", height=380, template="plotly_white",
+            barmode="group", height=380, template="simple_white",
             yaxis_title="Probabilidade",
             title="Efeito de diferentes temperaturas nos mesmos logits",
         )
@@ -723,7 +1227,7 @@ with tab5:
                     xaxis_title="Confiança predita",
                     yaxis_title="Accuracy real",
                     xaxis_range=[0, 1], yaxis_range=[0, 1],
-                    height=400, template="plotly_white",
+                    height=400, template="simple_white",
                 )
                 st.plotly_chart(fig_rel, use_container_width=True)
 
@@ -810,7 +1314,7 @@ with tab6:
                               line_color="orange", annotation_text=f"MSP threshold={ood_data['msp_threshold']:.3f}")
             fig_ood.update_layout(
                 title="Distribuição de probabilidades (< threshold → OOD)",
-                yaxis_range=[0, 1.1], height=320, template="plotly_white", showlegend=False,
+                yaxis_range=[0, 1.1], height=320, template="simple_white", showlegend=False,
             )
             st.plotly_chart(fig_ood, use_container_width=True)
 
@@ -864,7 +1368,7 @@ with tab7:
         fig_conf.add_hline(y=0.7, line_dash="dash", line_color="orange",
                            annotation_text="threshold alta confiança (0.7)")
         fig_conf.update_layout(
-            yaxis_range=[0, 1.1], height=320, template="plotly_white",
+            yaxis_range=[0, 1.1], height=320, template="simple_white",
             yaxis_title="Confiança média",
         )
         st.plotly_chart(fig_conf, use_container_width=True)
@@ -1005,7 +1509,7 @@ with tab8:
                 ))
                 fig_sal.update_layout(
                     xaxis_title="Token", yaxis_title="Saliência (0–1)",
-                    yaxis_range=[0, 1.15], height=320, template="plotly_white",
+                    yaxis_range=[0, 1.15], height=320, template="simple_white",
                     title=f"Saliência por token — {method_name}",
                 )
                 st.plotly_chart(fig_sal, use_container_width=True)
@@ -1082,7 +1586,7 @@ with tab9:
                 textposition="outside",
             ))
             fig_mem.update_layout(title="Memória (MB)", height=300,
-                                  template="plotly_white", yaxis_title="MB")
+                                  template="simple_white", yaxis_title="MB")
             st.plotly_chart(fig_mem, use_container_width=True)
 
         with col_b2:
@@ -1094,7 +1598,7 @@ with tab9:
                 textposition="outside",
             ))
             fig_lat.update_layout(title="Latência por inferência (ms)", height=300,
-                                  template="plotly_white", yaxis_title="ms")
+                                  template="simple_white", yaxis_title="ms")
             st.plotly_chart(fig_lat, use_container_width=True)
 
         st.info(
@@ -1151,7 +1655,7 @@ with tab10:
                            text=[f"{v:.2f}" for v in codebert_per_class.values()], textposition="outside")
             fig_bl.update_layout(
                 barmode="group", title="F1 por classe: Baseline vs CodeBERT",
-                yaxis_range=[0, 1.15], height=360, template="plotly_white",
+                yaxis_range=[0, 1.15], height=360, template="simple_white",
             )
             st.plotly_chart(fig_bl, use_container_width=True)
 
@@ -1228,7 +1732,7 @@ with tab11:
         fig_ent.update_layout(
             title="Distribuição de entropia no test set",
             xaxis_title="Entropia H(p)", yaxis_title="Count",
-            height=300, template="plotly_white",
+            height=300, template="simple_white",
         )
         st.plotly_chart(fig_ent, use_container_width=True)
 
@@ -1268,7 +1772,7 @@ with tab11:
             fig_al.update_layout(
                 title="F1 por round de Active Learning",
                 xaxis_title="Round", yaxis_title="F1 Macro",
-                height=300, template="plotly_white",
+                height=300, template="simple_white",
             )
             st.plotly_chart(fig_al, use_container_width=True)
 
@@ -1345,7 +1849,7 @@ with tab12:
                 xaxis_title="Exemplos de treino",
                 yaxis_title="F1 Macro",
                 yaxis_range=[0, 1.05],
-                height=420, template="plotly_white",
+                height=420, template="simple_white",
             )
             st.plotly_chart(fig_lc, use_container_width=True)
 
@@ -1404,7 +1908,7 @@ with tab13:
         ))
         fig_ref.update_layout(
             title="Distribuição esperada (referência)",
-            yaxis_range=[0, 0.4], height=300, template="plotly_white",
+            yaxis_range=[0, 0.4], height=300, template="simple_white",
             yaxis_title="Fração",
         )
         st.plotly_chart(fig_ref, use_container_width=True)
@@ -1475,7 +1979,7 @@ with tab13:
                     )
                     fig_cmp.update_layout(
                         barmode="group", title="Distribuição atual vs referência",
-                        yaxis_range=[0, 1.1], height=340, template="plotly_white",
+                        yaxis_range=[0, 1.1], height=340, template="simple_white",
                     )
                     st.plotly_chart(fig_cmp, use_container_width=True)
 
