@@ -1,0 +1,16 @@
+torch>=2.0
+transformers>=4.40
+datasets>=2.19
+peft>=0.10
+mlflow>=2.13
+fastapi>=0.111
+uvicorn>=0.29
+scikit-learn>=1.4
+matplotlib>=3.8
+seaborn>=0.13
+anthropic>=0.25
+ipykernel>=6.29
+jupyter>=1.0
+notebook>=7.0
+tqdm>=4.66
+pandas>=2.2

@@ -1,0 +1,28 @@
+# datasets e splits gerados
+data/splits/
+
+# checkpoints e artefatos de modelo (grandes demais para git)
+models/
+mlruns/
+mlflow.db
+*.pt
+*.safetensors
+
+# ambientes virtuais
+venv/
+venv311/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.egg-info/
+.ipynb_checkpoints/
+
+# Streamlit / Playwright
+.playwright-mcp/
+.streamlit/
+
+# macOS
+.DS_Store
