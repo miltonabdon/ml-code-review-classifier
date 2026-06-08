@@ -173,6 +173,16 @@ p, li, .stMarkdown {
   color: var(--c-slate) !important;
 }
 
+/* Buttons contain <p> tags — must not inherit body text color */
+.stButton button p,
+.stButton button span,
+.stButton button div {
+  color: inherit !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+}
+
 /* Caption / small */
 .stCaption, [data-testid="stCaptionContainer"] p {
   font-size: 0.775rem !important;
