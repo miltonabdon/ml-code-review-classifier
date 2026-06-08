@@ -1442,10 +1442,100 @@ with tab7:
 with tab8:
     st.header("🧠 Explainability — Por que o modelo decidiu assim?")
     st.caption(
-        "**Gradient × Input saliency**: para cada token, saliência = ||grad × embedding||₂. "
-        "Tokens com score alto foram os mais determinantes para a predição. "
-        "**Attention Rollout**: propaga atenção através de todas as camadas via produto matricial."
+        "Duas técnicas de post-hoc explainability para inspecionar o que o modelo usa para classificar. "
+        "Nenhuma delas modifica o modelo — são leituras da mecânica interna após o forward pass."
     )
+
+    with st.expander("Como funcionam os métodos — conceitos e limitações", expanded=False):
+        st.markdown("""
+**Gradient × Input saliency**
+
+O modelo transforma cada token num vetor de 768 números (embedding). Durante o forward pass, esses
+vetores passam por 12 camadas Transformer até produzir logits de classificação. O gradiente mede
+*quanto cada dimensão do embedding influenciou o logit da classe predita*: se aumentar o valor de uma
+dimensão em 0.001 muda o logit em 0.05, o gradiente é 50.
+
+A saliência final de um token é a norma L2 do produto elemento-a-elemento entre o gradiente e o
+próprio embedding: `score = ‖grad ⊙ embedding‖₂`. Isso combina "quanto esse eixo importou" com
+"quanto energia o token já tinha nesse eixo" — um token raro com alto gradiente aparece com score
+alto; um token comum com embedding neutro aparece baixo mesmo com gradiente moderado.
+
+*Limitação principal*: gradiente capta importância **local** — o efeito de uma perturbação infinitesimal.
+Se o modelo usa interações não-lineares entre tokens (e usa), a saliência por token individualmente
+pode subestimar palavras que só importam em combinação.
+
+---
+
+**Attention Rollout**
+
+Transformers têm 12 camadas, cada uma com 12 attention heads. Cada head produz uma matriz
+(seq_len × seq_len) indicando quanto cada posição "olhou" para cada outra. O problema: atenção da
+camada 3 olhou para saídas da camada 2, que já eram compostas de atenções da camada 1 — a atenção
+final do [CLS] não é a soma direta das atenções brutas.
+
+Rollout resolve isso propagando atenção em cadeia: para cada camada, adiciona a identidade (a
+residual connection real do Transformer), renormaliza as linhas, e multiplica matrizes da primeira à
+última camada. O score final de cada token é a entrada `rollout[0, i]` — o quanto o [CLS] "olhou"
+para o token i após propagar por todas as camadas.
+
+*Limitação principal*: Rollout assume que toda a informação flui pelo [CLS]. Em classificação
+sequence-level isso é razoável, mas o método ignora atenções cross-head e pode superestimar tokens no
+início da sequência (dilution à medida que as camadas se acumulam).
+
+---
+
+**Correlação Spearman (ao rodar "Ambos")**
+
+Mede se os dois métodos concordam na *ordem de importância* dos tokens — não nos valores absolutos,
+mas em quais tokens são mais importantes que outros.
+
+| Valor | Interpretação |
+|---|---|
+| > 0.70 | Alta concordância — ambos os métodos identificam as mesmas evidências |
+| 0.40–0.70 | Concordância parcial — vale examinar onde divergem |
+| < 0.40 | Baixa concordância — os métodos captam aspectos diferentes do texto |
+
+Quando Spearman é baixo, o mais informativo é comparar os top-3 tokens de cada método.
+
+---
+
+**O que observar nas visualizações**
+
+1. **Tokens com score > 0.7** são as âncoras da decisão. Para `security`, esperamos ver `concat`,
+   `injection`, `query`, `password`. Se aparecerem tokens genéricos (`the`, `is`, `a`), o modelo
+   pode estar se apoiando em artefatos do dataset sintético.
+
+2. **Score alto em stopwords** é sinal de atenção spurious — indica overfitting no dataset
+   sintético. Com dados reais e variados, esse padrão diminui.
+
+3. **Gradient vs Rollout em textos longos**: em sequências com > 50 tokens, Rollout tende a diluir
+   os scores (todos ficam próximos de 1/n). Gradient×Input é mais discriminativo nesses casos.
+
+4. **Fronteira architecture/style**: confiança média ~55% nesta POC. Se a saliência destacar os
+   mesmos tokens em ambas as classes, o problema é semântico — não de arquitetura do modelo.
+        """)
+
+    with st.expander("Por que explainability importa em produção", expanded=False):
+        st.markdown("""
+Em um classifier de code review em produção, explainability resolve três problemas práticos:
+
+**Debugging de erros**: quando o modelo classifica `observability` como `style`, a saliência mostra
+quais tokens guiaram a decisão errada. Se `log` teve score alto mas `silent` (keyword de
+observabilidade) teve score baixo, o problema está no dataset — não na arquitetura do modelo.
+
+**Detecção de shortcuts**: modelos treinados em datasets sintéticos aprendem correlações espúrias.
+Se todos os exemplos `security` no treino contêm a palavra `SQL`, o modelo aprende a associar `SQL` →
+security mesmo num contexto benigno. A saliência expõe esse atalho antes de ir a produção.
+
+**Auditabilidade**: mostrar ao engenheiro *quais palavras levaram à classificação* é fundamentalmente
+diferente de mostrar apenas "security 94%". O segundo é caixa preta; o primeiro é explicação
+auditável — necessária em contextos onde o reviewer precisa validar ou contestar a sugestão.
+
+**Limitação desta POC**: os dois métodos são *post-hoc* — explicam o modelo após o fato, não como
+ele foi treinado. Para explicabilidade mais robusta: Integrated Gradients (remove a saturação do
+gradiente simples), LIME/SHAP (model-agnostic, testa perturbações reais), ou TCAV (conceitos de alto
+nível como "contém SQL" em vez de tokens individuais).
+        """)
 
     if not full_model:
         st.warning("Modelo full não carregado.")
@@ -1491,8 +1581,20 @@ with tab8:
                         ("Gradient × Input", cmp["gradient_saliency"]),
                         ("Attention Rollout", cmp["attention_rollout"]),
                     ]
-                    st.metric("Correlação Spearman (grad vs rollout)", f"{cmp['spearman_corr']:.3f}",
-                              help="1=idênticos, 0=sem correlação, -1=opostos")
+                    corr = cmp["spearman_corr"]
+                    corr_label = (
+                        "alta concordância — ambos identificam as mesmas evidências" if corr > 0.70
+                        else "concordância parcial — compare os top-3 tokens de cada método" if corr > 0.40
+                        else "baixa concordância — os métodos captam aspectos diferentes do texto"
+                    )
+                    st.metric(
+                        "Correlação Spearman (grad vs rollout)",
+                        f"{corr:.3f}",
+                        delta=corr_label,
+                        delta_color="off",
+                        help="Mede concordância na *ordem* de importância dos tokens. "
+                             "> 0.70 = alta, 0.40–0.70 = parcial, < 0.40 = baixa.",
+                    )
 
             for method_name, res in results_to_show:
                 st.subheader(method_name)
@@ -1504,6 +1606,15 @@ with tab8:
                     unsafe_allow_html=True,
                 )
                 st.markdown("")
+
+                # Top-3 tokens âncora
+                token_score_pairs = sorted(
+                    zip(res["tokens"], res["scores"]), key=lambda x: x[1], reverse=True
+                )
+                top3 = [(t.strip() or t, s) for t, s in token_score_pairs if t.strip()][:3]
+                if top3:
+                    anchor_str = " · ".join(f"`{t}` ({s:.2f})" for t, s in top3)
+                    st.caption(f"Top-3 âncoras: {anchor_str}")
 
                 # Bar chart de saliência por token
                 tokens_clean = [t.replace("Ġ", " ").replace("Ċ", "↵").strip() or t for t in res["tokens"]]
@@ -1526,14 +1637,19 @@ with tab8:
 
                 # HTML colorido
                 html = tokens_to_html(res["tokens"], res["scores"], res["pred_label"], res["pred_conf"])
-                st.markdown("**Visualização colorida:**")
+                st.markdown("**Visualização colorida** — intensidade = importância do token para a decisão:")
                 st.components.v1.html(html, height=100)
 
         # HTML salvo
         html_path = ROOT / "models" / "explainability_sample.html"
         if html_path.exists():
             st.divider()
-            st.subheader("Exemplos pré-gerados (5 exemplos do test set)")
+            st.subheader("Exemplos pré-gerados — 5 amostras do test set")
+            st.caption(
+                "Gerados por `python src/explainability.py`. Cada exemplo mostra Gradient×Input e "
+                "Attention Rollout lado a lado. Use para comparar o comportamento do modelo em casos "
+                "reais antes de interagir com o campo de texto acima."
+            )
             html_content = html_path.read_text(encoding="utf-8")
             st.components.v1.html(html_content, height=500, scrolling=True)
 
