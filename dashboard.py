@@ -721,6 +721,48 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13
 # ════════════════════════════════════════════════════════════════════════════
 with tab1:
     st.header("Experimentos MLflow")
+    st.caption(
+        "Cada run é um experimento completo de treino. Selecione dois runs para comparar "
+        "as curvas de loss e accuracy por epoch."
+    )
+
+    with st.expander("O que são essas curvas e como interpretá-las", expanded=False):
+        st.markdown("""
+**Loss (Cross-Entropy)**
+
+A loss é o quanto o modelo está errando, medida pela fórmula:
+`loss = −log(probabilidade atribuída à classe correta)`.
+Se o modelo diz "security = 0.9" e a resposta correta é security, a loss é −log(0.9) ≈ 0.10.
+Se diz "security = 0.1" quando devia ser security, a loss é −log(0.1) ≈ 2.30.
+
+O treino funciona calculando esse erro no batch, rodando backpropagation (derivadas parciais em cadeia
+do loss até cada peso), e atualizando os pesos na direção que reduz o loss (gradient descent).
+
+**Train loss vs Val loss**
+
+| Padrão | Diagnóstico |
+|---|---|
+| Ambas descendo juntas | Treino saudável |
+| Train desce, val estagna | Overfitting — modelo memoriza o treino |
+| Ambas estagnadas alta | Underfitting — LR pequeno ou poucas epochs |
+| Val desce depois sobe | Early stopping aqui: epoch de menor val_loss |
+
+**Por que val_loss é o sinal que importa**: train_loss sempre desce — o modelo está sendo otimizado
+diretamente nele. Val_loss mede generalização para exemplos não vistos. Se val_loss começa a subir
+enquanto train_loss desce, o modelo parou de generalizar e começou a memorizar.
+
+**Accuracy vs Loss**
+
+Accuracy conta acertos/total — é intuitiva mas ruidosa epoch a epoch (um único batch pode virar a
+métrica). Loss é contínua e mais estável para diagnosticar tendências. Olhe a Loss para decidir
+quando parar; olhe a Accuracy para comunicar resultado final.
+
+**MLflow**
+
+Cada run registra automaticamente: hiperparâmetros (LR, batch, epochs), métricas por epoch
+(train_loss, val_loss, val_accuracy), e o artefato do modelo. Serve como histórico de experimentos
+— você pode comparar runs e identificar qual configuração produziu o melhor val_loss.
+        """)
 
     client = get_mlflow_client()
 
@@ -831,6 +873,47 @@ with tab1:
 # ════════════════════════════════════════════════════════════════════════════
 with tab2:
     st.header("Full Fine-tuning vs LoRA")
+    st.caption(
+        "Compara dois modelos no mesmo test set: fine-tuning completo (todos os 125M parâmetros) "
+        "vs LoRA (apenas 1.18M parâmetros, 0.94% do total). Métricas, confusion matrix e tamanho de artefato."
+    )
+
+    with st.expander("Como funciona cada técnica — e por que LoRA vence aqui", expanded=False):
+        st.markdown("""
+**Fine-tuning completo**
+
+O CodeBERT base tem 125M parâmetros pré-treinados em código (GitHub). Fine-tuning completo descongela
+todos esses parâmetros e os atualiza com o dataset de code review. O problema: com 200 exemplos, você
+está tentando ajustar 125 milhões de parâmetros — muito espaço de busca para pouca evidência. O
+modelo tende a overfitting nos dados sintéticos.
+
+**LoRA (Low-Rank Adaptation)**
+
+LoRA não toca nos pesos originais. Em vez disso, para cada matriz de pesos W (ex: query projection
+da atenção), adiciona dois tensores pequenos: `W_novo = W_original + B × A`, onde A tem forma
+(r × d) e B tem forma (d × r), com r << d (r=16, d=768 nesta POC). O produto B×A é uma atualização
+de baixo rank — captura as adaptações necessárias com muito menos parâmetros.
+
+**Por que LoRA supera aqui (0.920 vs 0.876)**
+
+Com dataset pequeno e sintético, o fine-tuning completo tem alto risco de overfitting. O LoRA atua
+como regularização implícita: a atualização de baixo rank limita o modelo a aprender apenas as
+direções mais importantes, sem poder sobrescrever todo o conhecimento pré-treinado. Com 200 exemplos,
+essa restrição é vantagem — não limitação.
+
+**Confusion matrix**
+
+Cada célula [i][j] mostra quantas vezes o modelo previu j quando a resposta era i. A diagonal
+principal são os acertos. Off-diagonal mais quente = confusão frequente entre aquele par de classes.
+Nesta POC, o par mais confuso é `architecture`/`style` — fronteira semântica real entre "design
+estrutural" e "convenção de código".
+
+**F1-Score vs Accuracy**
+
+Accuracy = (acertos / total) — enganosa com classes desbalanceadas. F1 por classe = harmônica entre
+precision (dos que previ como X, quantos eram X?) e recall (dos que eram X, quantos previ como X?).
+F1 Macro = média dos F1 por classe, dando peso igual a cada classe independente do tamanho.
+        """)
 
     if not full_model:
         st.warning("Modelo full não encontrado. Execute `python src/train.py`.")
@@ -932,6 +1015,43 @@ with tab2:
 # ════════════════════════════════════════════════════════════════════════════
 with tab3:
     st.header("Inferência ao Vivo")
+    st.caption(
+        "Classifique qualquer finding de code review em tempo real. "
+        "O gráfico mostra as probabilidades brutas do softmax para as 5 classes."
+    )
+
+    with st.expander("O que acontece durante a inferência", expanded=False):
+        st.markdown("""
+**Pipeline completo em ~50ms**
+
+1. **Tokenização**: o texto é quebrado em tokens pelo tokenizer do CodeBERT (BPE — Byte Pair
+   Encoding). Palavras comuns viram um token; palavras raras ou código são fragmentadas em subpalavras.
+   Tokens especiais `[CLS]` (início) e `[SEP]` (fim) são adicionados. O resultado é uma sequência
+   de IDs inteiros.
+
+2. **Embedding**: cada token ID é mapeado para um vetor de 768 dimensões. Esses vetores carregam o
+   significado semântico aprendido no pré-treino com código real.
+
+3. **Transformer (12 camadas)**: cada camada aplica self-attention (cada token "olha" para todos os
+   outros) e uma rede feed-forward. A saída do `[CLS]` após as 12 camadas concentra o significado
+   global da sequência.
+
+4. **Classification head**: o vetor do `[CLS]` passa por uma camada linear (768 → 5) que produz 5
+   números brutos chamados logits.
+
+5. **Softmax**: `p_i = exp(logit_i) / sum(exp(logits))`. Converte os logits em probabilidades que
+   somam 1. A classe com maior probabilidade é a predição.
+
+**Como interpretar as probabilidades**
+
+- Probabilidade alta (> 0.85) numa só classe: o modelo está confiante. Use o resultado.
+- Probabilidade dividida entre 2 classes (ex: 0.55/0.35): o modelo está no limiar. Leia os dois
+  candidatos e decida com contexto.
+- Sem classe acima de 0.50: possível OOD (input fora do domínio). Veja a aba OOD Detection.
+
+**Importante**: confiança alta ≠ acurácia. Um modelo pode ser confiante e errado — é o que a aba
+Calibração mede. A aba Análise de Erros mostra exatamente os casos de alta confiança incorretos.
+        """)
 
     if not full_model and not lora_model:
         st.warning("Nenhum modelo carregado. Execute `python src/train.py` e `python src/lora_train.py`.")
@@ -1019,6 +1139,64 @@ with tab4:
         "Simula o efeito de hiperparâmetros nas curvas de treino **sem retreinar o modelo**. "
         "As curvas são geradas por um modelo analítico calibrado nos experimentos reais."
     )
+
+    with st.expander("O que cada hiperparâmetro faz — e como ler o diagnóstico", expanded=False):
+        st.markdown("""
+**Learning Rate (LR)**
+
+Controla o tamanho do passo na atualização dos pesos: `W_novo = W_atual − LR × gradiente`.
+
+- **LR muito alto** (ex: 1e-4 com BERT): os passos são grandes demais — a loss oscila ou diverge
+  em vez de convergir. O gráfico mostra val_loss instável ou subindo.
+- **LR muito baixo** (ex: 5e-6): passos minúsculos — a loss desce lentamente e você precisa de muitas
+  epochs para convergir. Pode parecer underfitting precoce.
+- **LR ótimo para fine-tuning BERT**: 2e-5 a 5e-5. Pequeno o suficiente para não destruir o
+  pré-treino, grande o suficiente para adaptar em poucas epochs.
+
+**Epochs**
+
+Número de vezes que o modelo vê o dataset completo. Mais epochs = mais atualização de pesos.
+
+- Poucas epochs: underfitting — o modelo ainda não aprendeu as representações do dataset.
+- Muitas epochs: overfitting — train_loss continua caindo mas val_loss começa a subir. A zona
+  vermelha no gráfico indica esse risco.
+
+**Dataset size**
+
+Mais dados = representação mais rica = generalização melhor. Com poucas amostras, o modelo aprende
+a distribuição do treino e não da tarefa real. O efeito é visível: com n=50 o gap train/val é maior
+que com n=500.
+
+**LoRA rank (r)**
+
+O rank r define a "capacidade de adaptação" do LoRA: r=4 permite poucas direções de atualização,
+r=64 permite muitas. Rank maior = mais parâmetros treináveis = maior risco de overfitting com dataset
+pequeno. Para esta POC com 200 exemplos, r=8 ou r=16 é o ponto ideal.
+
+**Gap train/val**
+
+`gap = média(val_loss[-3 epochs]) − média(train_loss[-3 epochs])`
+
+- gap > 0.15: overfitting confirmado. Ação: reduzir epochs, aumentar dropout, ou aumentar dataset.
+- gap < 0 (val_loss < train_loss): raro mas possível com dropout — o modelo avalia sem dropout e
+  parece melhor do que no treino.
+- gap próximo de 0: generalização saudável.
+        """)
+
+    with st.expander("Como o simulador funciona internamente", expanded=False):
+        st.markdown("""
+O simulador não roda GPU — as curvas são funções analíticas calibradas nos runs reais do MLflow.
+
+O modelo de simulação usa:
+- Decaimento exponencial para a loss: `loss(e) = loss_0 × exp(−k × e) + noise`
+- O coeficiente k é função do LR, tamanho do dataset e se é LoRA ou Full FT
+- Overfitting é modelado como divergência crescente train/val após um epoch crítico que depende do
+  tamanho do dataset
+
+Isso permite explorar o espaço de hiperparâmetros instantaneamente, sem custo computacional.
+A limitação: o modelo analítico não captura interações complexas entre hiperparâmetros — para isso,
+rode `python src/train.py` com diferentes configurações e compare na aba Experimentos.
+        """)
 
     col_ctrl, col_plot = st.columns([1, 2])
 
@@ -1347,6 +1525,47 @@ with tab7:
     st.header("Análise de Erros")
     st.caption("Onde o modelo erra, com que confiança, e quais são os casos mais perigosos.")
 
+    with st.expander("Como usar a análise de erros para melhorar o modelo", expanded=False):
+        st.markdown("""
+**Por que analisar erros antes de tunar**
+
+Tunar hiperparâmetros sem entender os erros é otimizar às cegas. A análise de erros responde:
+o modelo erra por falta de dados, por ambiguidade semântica real, ou por shortcut espúrio?
+A resposta muda completamente a ação corretiva.
+
+**Confiança média por classe**
+
+Mostra a confiança média do modelo nas predições corretas, separada por classe verdadeira.
+- Classe com confiança média alta (> 0.80): o modelo está seguro nessa categoria.
+- Classe com confiança média baixa (~0.55): o modelo está na fronteira — os exemplos desta classe
+  se sobrepõem com outra. Nesta POC, `architecture` e `style` ficam em ~55%.
+
+**Erros de alta confiança (≥ 0.7)**
+
+São os mais perigosos em produção: o modelo erra E está convicto do erro. Em um sistema de code
+review automatizado, esses casos passariam sem flag para revisão humana.
+
+Padrão a observar: se os erros de alta confiança se concentram num par de classes (ex: architecture
+predito como style com 78%), o problema é de representação — os embeddings dessas classes estão
+próximos no espaço vetorial. Solução: mais dados com marcadores distintos ou pair model (finding +
+diff).
+
+**Exemplos de fronteira (|p1 − p2| < 0.2)**
+
+O gap é a diferença entre a probabilidade da classe mais provável e a segunda mais provável.
+Gap pequeno = modelo incerto = caso ambíguo. Esses exemplos são os melhores candidatos para anotação
+manual no ciclo de Active Learning — máximo ganho de informação por esforço.
+
+**Como diagnosticar a causa do erro**
+
+1. Leia o texto do exemplo errado.
+2. Veja qual classe foi predita e com que confiança.
+3. Pergunte: "um humano experiente erraria isso?" Se sim, o problema é no dataset (exemplos
+   ambíguos ou underrepresentados). Se não, o problema é no modelo (shortcut, falta de capacidade
+   ou feature espúria).
+4. Use a aba Explainability com esse mesmo texto para ver quais tokens guiaram o erro.
+        """)
+
     if not full_model:
         st.warning("Modelo full não carregado.")
     else:
@@ -1664,6 +1883,48 @@ with tab9:
         "qnnpack (Apple Silicon) é mais lento que fbgemm (Linux x86)."
     )
 
+    with st.expander("Como a quantização funciona — e quando usar", expanded=False):
+        st.markdown("""
+**De Float32 para Int8**
+
+Pesos de redes neurais são tipicamente armazenados como float32 (32 bits por número). Quantização
+pós-treino mapeia esses pesos para int8 (8 bits) usando calibração estatística:
+
+1. Rodamos o modelo em alguns exemplos (calibração) e coletamos os ranges de valores dos pesos
+   e ativações.
+2. Calculamos o fator de escala: `scale = (max − min) / 255`.
+3. Convertemos: `w_int8 = round(w_float32 / scale) + zero_point`.
+
+A operação inversa (dequantização) reconstrói o float32 aproximado na hora da inferência.
+
+**Por que F1 fica idêntico mas memória cai 68%**
+
+A quantização é suficientemente precisa para os fins de classificação de texto: a perda de precisão
+numérica (float32 → int8) afeta apenas as casas decimais dos logits, sem mudar qual classe tem a
+maior probabilidade. O F1 medido no test set é idêntico porque nenhum exemplo muda de classe.
+
+A memória cai de ~480 MB para ~155 MB porque cada parâmetro ocupa 4x menos espaço (32 bits → 8 bits).
+
+**Por que fica mais lento no Mac (qnnpack)**
+
+Quantização acelera inferência em hardware com instruções SIMD otimizadas para int8 — o que Intel/AMD
+(fbgemm) fazem bem. O backend qnnpack do Apple Silicon não tem essa otimização no PyTorch atual,
+então a dequantização overhead supera o ganho. Em produção com CPU x86 (container Linux), a latência
+seria menor que FP32.
+
+**Quando usar quantização**
+
+| Cenário | Recomendação |
+|---|---|
+| Deploy em CPU (servidor Linux) | INT8 — latência e memória menores |
+| Deploy em Apple Silicon | FP32 ou esperar otimização do backend |
+| GPU inference (NVIDIA) | FP16 mixed precision > INT8 para BERT |
+| Edge/mobile (RAM limitada) | INT8 ou INT4 (quantização mais agressiva) |
+
+**Próximos passos além desta POC**: Quantization-Aware Training (QAT) — treina com simulação de
+quantização e recupera 0.5–1pp de F1. GPTQ e AWQ fazem quantização INT4 para LLMs com perda mínima.
+        """)
+
     bench_path = ROOT / "models" / "quantization_benchmark.json"
     if not bench_path.exists():
         st.warning("Execute `python src/quantization.py` para gerar o benchmark.")
@@ -1819,6 +2080,52 @@ with tab11:
         "Humano anota esses — não todos. Loop iterativo que maximiza ganho por esforço de anotação."
     )
 
+    with st.expander("Como funciona o Active Learning — o loop completo", expanded=False):
+        st.markdown("""
+**O problema que resolve**
+
+Anotar dados é caro. Um engenheiro anotando findings de code review leva 2–5 minutos por exemplo.
+Para 1000 exemplos, são 40–80 horas. Active Learning reduz esse custo: em vez de anotar aleatoriamente,
+o modelo indica quais exemplos são mais informativos — os que ele menos sabe classificar.
+
+**O loop iterativo**
+
+```
+1. Treinar com dataset inicial pequeno (seed set)
+2. Rodar o modelo em pool de exemplos não anotados
+3. Selecionar os N mais incertos (por entropia ou margin sampling)
+4. Humano anota esses N exemplos
+5. Adicionar ao treino e retreinar
+6. Repetir até atingir F1 alvo ou orçamento de anotação
+```
+
+**Entropia como medida de incerteza**
+
+Para um classificador de 5 classes, a entropia máxima é `log2(5) ≈ 2.32 bits` (quando o modelo
+distribui 20% para cada classe — completamente perdido). Entropia zero ocorre quando o modelo
+atribui 100% a uma classe — completamente confiante.
+
+`H(p) = −Σ p_i × log2(p_i)`
+
+Os exemplos com maior entropia são os candidatos para anotação: o modelo os coloca na fronteira de
+decisão e qualquer nova informação sobre eles vai mover os pesos de forma significativa.
+
+**Comparação de estratégias de seleção**
+
+| Estratégia | Como seleciona | Vantagem | Limitação |
+|---|---|---|---|
+| Random | Aleatório | Simples, sem viés | Desperdiça budget em fáceis |
+| Uncertainty (entropia) | Maior H(p) | Eficiente, 40% menos anotações | Pode selecionar outliers |
+| Margin sampling | Menor p1 − p2 | Similar à entropia, mais intuitivo | Ignora terceira classe |
+| Query by Committee | Maior disagreement entre modelos | Mais robusto | Requer vários modelos |
+
+**Por que a simulação aqui tem ganho pequeno**
+
+O val set tem 25 exemplos sintéticos, e o modelo já convergiu nesse domínio estreito. Com dados reais
+do `github_scraper.py`, cada round adicionaria 10–20 exemplos genuinamente novos e o F1 subiria 1–3pp
+por round — o que é substancial considerando que o modelo já parte de F1=0.876.
+        """)
+
     if not full_model:
         st.warning("Modelo full não carregado.")
     else:
@@ -1913,6 +2220,45 @@ with tab12:
         "Cada ponto treina do **base model pré-treinado** (não do checkpoint), "
         "medindo o efeito real do tamanho do dataset."
     )
+
+    with st.expander("Como ler e usar as learning curves", expanded=False):
+        st.markdown("""
+**O que é uma learning curve**
+
+Cada ponto no gráfico representa um experimento independente: treinar o modelo com X% dos dados,
+avaliar no val e test set, registrar o F1. O eixo X é o número de exemplos de treino; o eixo Y é
+o F1 Macro.
+
+Importante: cada ponto parte do **base model pré-treinado** (não do checkpoint final) — isso isola
+o efeito do tamanho do dataset sem contaminar com informação dos experimentos anteriores.
+
+**Três padrões possíveis e o que fazer**
+
+| Padrão | Diagnóstico | Ação |
+|---|---|---|
+| Curva sobe e ainda não planifica | Mais dados ajudariam | Coletar mais exemplos anotados |
+| Curva planificou (ganho < 0.01 no último quartil) | Modelo saturado para este dataset | Melhorar arquitetura, features ou pipeline |
+| Curva do baseline acompanha o CodeBERT | Pré-treino não está contribuindo | Dataset sintético demais — coletar dados reais |
+
+**Gap entre val e test**
+
+Val F1 e test F1 devem ser próximos (< 0.03 de diferença) ao longo de toda a curva. Se o gap cresce
+com mais dados, é sinal de data leakage entre treino e val — risco de avaliar o modelo em exemplos
+que "vazaram" do treino.
+
+**Por que a baseline também cresce**
+
+TF-IDF com mais dados aprende n-grams mais ricos. A curva do baseline crescendo junto com o CodeBERT
+é evidência de que o ganho vem do volume de dados, não necessariamente do pré-treino. O gap entre
+as duas curvas mede a contribuição real do CodeBERT em cada fração — se o gap cresce com mais dados,
+o pré-treino está sendo bem aproveitado.
+
+**Decisão de investimento em dados**
+
+Se a curva ainda sobe em 80% dos dados: coletar mais exemplos tem ROI alto.
+Se planificou em 50%: o próximo investimento deveria ser na qualidade das anotações ou na diversidade
+das fontes, não no volume.
+        """)
 
     lc_path = ROOT / "models" / "learning_curves.json"
 
@@ -2013,6 +2359,62 @@ with tab13:
         "Monitora se a distribuição das predições em produção está se desviando do esperado. "
         "**PSI** mede drift na distribuição de classes. **KS test** mede drift na distribuição de confiança."
     )
+
+    with st.expander("Como funciona a detecção de drift — PSI, KS e os 3 cenários", expanded=False):
+        st.markdown("""
+**O problema em produção**
+
+Um modelo treinado em dados de um período pode degradar silenciosamente quando a distribuição de
+inputs muda. Exemplo: o time passou a fazer mais code reviews de segurança (label shift) — o modelo
+foi calibrado para distribuição balanceada e agora fica sobrecarregado numa classe. Ou inputs fora
+do domínio chegam (domain shift) e o modelo classifica com confiança espúria.
+
+**PSI — Population Stability Index**
+
+Compara a distribuição de classes preditas entre a referência (treino) e a janela atual (produção).
+
+`PSI = Σ (p_atual_i − p_ref_i) × log(p_atual_i / p_ref_i)`
+
+| PSI | Status |
+|---|---|
+| < 0.10 | Estável — distribuição não mudou significativamente |
+| 0.10–0.25 | Mudança moderada — monitorar mais de perto |
+| > 0.25 | Drift significativo — investigar e possivelmente retreinar |
+
+**KS Test (Kolmogorov-Smirnov)**
+
+O KS test compara duas distribuições empíricas — aqui, a distribuição de confiança (max softmax)
+entre a referência e a janela atual. O p-value indica a probabilidade de as duas amostras virem da
+mesma distribuição.
+
+- p < 0.05: as distribuições são estatisticamente diferentes (drift de confiança).
+- p > 0.05: não há evidência de drift na confiança.
+
+O KS é especialmente útil para detectar domain shift: inputs fora do domínio tendem a ter confiança
+diferente (às vezes mais alta por MSP espúrio, às vezes mais baixa).
+
+**Os 3 cenários simulados**
+
+| Cenário | O que acontece | PSI esperado | KS esperado |
+|---|---|---|---|
+| Sem drift (val set) | Distribuição similar ao treino | < 0.10 | p > 0.05 |
+| Label shift (só security) | 5× mais findings de security | > 0.25 | drift detectado |
+| Confidence drop (arch/style) | Fronteira ambígua, confiança cai | moderado | drift provável |
+| Domain shift (textos aleatórios) | Inputs fora do domínio | > 0.25 | drift detectado |
+
+**Como usar em produção**
+
+1. Gerar a distribuição de referência no train set: `python src/drift_detection.py`
+2. A cada N horas (ou N requests), rodar `DriftMonitor.check(textos_recentes)`
+3. Se verdict = `alert`: investigar os inputs recentes, considerar retreino
+4. Se verdict = `monitor`: aumentar frequência de verificação
+
+**Limitação com dataset sintético**
+
+MSP e entropia falham como detectores de OOD com dados sintéticos homogêneos — o modelo é confiante
+em qualquer input porque nunca viu inputs genuinamente diferentes. Com dados reais, o detector de
+domain shift funciona muito melhor.
+        """)
 
     ref_path = ROOT / "models" / "drift_reference.json"
 
